@@ -61,6 +61,13 @@ startBtn.onclick = async () => {
     status.innerText = "Listening...";
     addLog("🎤 Starting microphone...", "info");
     await startMic();
+
+    // 🔴 REQUIRED: periodic commit
+    // commitInterval = setInterval(() => {
+    //   if (socket && socket.readyState === WebSocket.OPEN) {
+    //     socket.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+    //   }
+    // }, 700);
   };
 
   socket.onmessage = (event) => {
@@ -128,7 +135,7 @@ async function startMic() {
   try {
     addLog("🎤 Requesting microphone permission...", "info");
 
-    audioContext = new AudioContext({ sampleRate: 24000 });
+    audioContext = new AudioContext({ sampleRate: 16000 });
     addLog(
       `✅ AudioContext created. Sample rate: ${audioContext.sampleRate}`,
       "success"
@@ -159,77 +166,25 @@ async function startMic() {
       if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
       const input = e.inputBuffer.getChannelData(0);
-      audioChunkCount++;
-
-      // Calculate audio level
-      let sum = 0;
-      let max = 0;
-      let hasSound = false;
-
-      for (let i = 0; i < input.length; i++) {
-        const val = Math.abs(input[i]);
-        sum += val;
-        max = Math.max(max, val);
-        if (val > 0.01) hasSound = true;
-      }
-
-      const avg = sum / input.length;
-
-      // Log audio level every second
-      const now = Date.now();
-      if (now - lastLogTime > 1000) {
-        addLog(
-          `🔊 Audio stats - Avg: ${avg.toFixed(4)}, Max: ${max.toFixed(
-            4
-          )}, Has sound: ${hasSound}`,
-          "info"
-        );
-        lastLogTime = now;
-      }
-
-      //   if (!hasSound) {
-      //     return;
-      //   }
-
-      // ✅ ADAPTIVE GAIN (works in quiet + noisy places)
-      let gain = avg < 0.005 ? 6.0 : avg < 0.02 ? 3.0 : 1.2;
-
-      // Convert float32 → int16
       const pcm16 = new Int16Array(input.length);
 
-      for (let i = 0; i < input.length; i++) {
-        let s = input[i] * gain;
+      const GAIN = 4.0;
 
-        // clamp to [-1, 1]
+      for (let i = 0; i < input.length; i++) {
+        let s = input[i] * GAIN;
+
         if (s > 1) s = 1;
         else if (s < -1) s = -1;
 
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
 
-      // Convert to base64
-      let binary = "";
-      const bytes = new Uint8Array(pcm16.buffer);
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = btoa(binary);
-
-      // Send audio chunk
       socket.send(
         JSON.stringify({
           type: "input_audio_buffer.append",
-          audio: base64,
+          audio: btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer))),
         })
       );
-
-      // Log every 10th chunk
-      if (audioChunkCount % 10 === 0) {
-        addLog(
-          `📤 Sent audio chunk ${audioChunkCount} (${bytes.length} bytes)`,
-          "info"
-        );
-      }
     };
 
     source.connect(processor);
