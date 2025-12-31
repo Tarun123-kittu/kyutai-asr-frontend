@@ -54,7 +54,7 @@ startBtn.onclick = async () => {
   status.innerText = "Connecting...";
   addLog("Starting connection...");
 
-  socket = new WebSocket("ws://localhost:8080/v1/realtime");
+  socket = new WebSocket("wss://asr.captify.glass/v1/realtime");
 
   socket.onopen = async () => {
     addLog("✅ WebSocket connected", "success");
@@ -63,11 +63,11 @@ startBtn.onclick = async () => {
     await startMic();
 
     // 🔴 REQUIRED: periodic commit
-    // commitInterval = setInterval(() => {
-    //   if (socket && socket.readyState === WebSocket.OPEN) {
-    //     socket.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
-    //   }
-    // }, 700);
+    commitInterval = setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      }
+    }, 700);
   };
 
   socket.onmessage = (event) => {
@@ -168,7 +168,7 @@ async function startMic() {
       const input = e.inputBuffer.getChannelData(0);
       const pcm16 = new Int16Array(input.length);
 
-      const GAIN = 4.0;
+      const GAIN = 1.5;
 
       for (let i = 0; i < input.length; i++) {
         let s = input[i] * GAIN;
